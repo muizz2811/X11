@@ -115,3 +115,7 @@
 22-09-2024 16:43:24 - Key Pressed: 
 22-09-2024 16:43:24 - Key Released: (null)
 22-09-2024 16:43:24 - Key Released: (null)
+Keylogger started at Sun Sep 22 17:37:33 2024
+
+Keylogger started at Sun Sep 22 17:38:53 2024
+

