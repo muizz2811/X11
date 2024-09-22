@@ -1,4 +1,5 @@
 #include <X11/Xlib.h>
+#include <X11/Xutil.h>  // Add this for XLookupString
 #include <X11/keysym.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,7 +11,7 @@ void log_key(const char *event_type, const char *key) {
 char* get_key_string(XKeyEvent *event, Display *display) {
     static char buf[128];
     KeySym keysym;
-    int len = XLookupString(event, buf, sizeof(buf), &keysym, NULL);
+    int len = XLookupString(event, buf, sizeof(buf), &keysym, NULL);  // Convert keypress to string
 
     if (len > 0) {
         buf[len] = '\0';  // Null-terminate the string
